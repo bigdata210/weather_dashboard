@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>현장 일정 날씨판</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>현장 일정 날씨판</h1>
+
+        <section class="task-list">
+            <h2>오늘 일정</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>일정</th>
+                        <th>지역</th>
+                        <th>구분</th>
+                        <th>담당</th>
+                    </tr>
+                </thead>
+                <tbody id="taskBody">
+                    <!-- app.js에서 동적으로 생성 -->
+                </tbody>
+            </table>
+        </section>
+
+        <section class="task-form">
+            <h2>일정 추가</h2>
+            <form id="addTaskForm">
+                <div class="form-group">
+                    <label for="taskTitle">일정 이름</label>
+                    <input type="text" id="taskTitle" required>
+                </div>
+                <div class="form-group">
+                    <label for="taskRegion">지역</label>
+                    <select id="taskRegion" required>
+                        <option value="">선택</option>
+                        <option value="세종">세종</option>
+                        <option value="대전">대전</option>
+                        <option value="태안">태안</option>
+                        <option value="보령">보령</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="taskKind">구분</label>
+                    <select id="taskKind" required>
+                        <option value="">선택</option>
+                        <option value="야외">야외</option>
+                        <option value="고소">고소</option>
+                        <option value="실내">실내</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="taskOwner">담당</label>
+                    <input type="text" id="taskOwner" required>
+                </div>
+                <button type="submit" class="btn-add">추가</button>
+            </form>
+        </section>
+    </div>
+
+    <script src="logic.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

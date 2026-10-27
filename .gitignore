@@ -1,0 +1,9 @@
+# 비밀 정보 · 내 PC 전용 파일은 GitHub에 올리지 않음
+.env
+.env.*
+!.env.example
+*.db
+.vercel
+.DS_Store
+Thumbs.db
+node_modules/
