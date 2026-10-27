@@ -130,7 +130,8 @@ async function fetchWeatherDataOpenMeteo() {
 
     try {
         for (const [region, info] of Object.entries(REGIONS)) {
-            const url = `https://api.open-meteo.com/v1/forecast?latitude=${info.lat}&longitude=${info.lon}&daily=temperature_2m_max,wind_speed_10m_max,precipitation_probability_max&timezone=Asia/Seoul`;
+            // wind_speed_unit=ms : 기본값이 km/h 라 기상청과 단위를 맞춘다
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${info.lat}&longitude=${info.lon}&daily=temperature_2m_max,wind_speed_10m_max,precipitation_probability_max&wind_speed_unit=ms&timezone=Asia/Seoul`;
 
             const response = await fetch(url);
             if (!response.ok) throw new Error(`API error for ${region}`);
@@ -227,10 +228,9 @@ function renderSource() {
 // 화면 그리기
 // ─────────────────────────────────────────────
 
-// 날씨 문자열 만들기
+// 날씨 문자열 만들기 (문구는 logic.js 와 같은 것을 쓴다)
 function getWeatherString(weather) {
-    if (!weather) return '날씨 확인 전';
-    return `${weather.maxTemp}°C · ${weather.windSpeed}m/s · ${weather.rainProbability}%`;
+    return formatWeatherCell(weather);
 }
 
 // 수치 한 칸 만들기
@@ -425,17 +425,39 @@ function renderDataNotice() {
     el.textContent = '일정 파일을 읽지 못했습니다. 배포 주소로 열어 주세요.';
 }
 
-// 오늘 날짜 표시 (YYYY-MM-DD)
-function displayTodayDate() {
+// 오늘 날짜 글자 만들기 (YYYY-MM-DD)
+function getTodayString() {
     const today = new Date();
     const year = today.getFullYear();
     const month = String(today.getMonth() + 1).padStart(2, '0');
     const date = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${date}`;
+}
 
+// 오늘 날짜 표시
+function displayTodayDate() {
     const todayDateEl = document.getElementById('todayDate');
     if (todayDateEl) {
-        todayDateEl.textContent = `${year}-${month}-${date}`;
+        todayDateEl.textContent = getTodayString();
     }
+}
+
+// 오늘 판단을 md 파일로 내려받기
+function downloadJudgmentMarkdown() {
+    const dateString = getTodayString();
+    const markdown = buildJudgmentMarkdown(getAllTasks(), weatherData, dateString);
+
+    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `현장일정_판단_${dateString}.md`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    URL.revokeObjectURL(url);
 }
 
 // ─────────────────────────────────────────────
@@ -509,6 +531,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.getElementById('refreshBtn')
         .addEventListener('click', refreshWeather);
+
+    document.getElementById('saveMdBtn')
+        .addEventListener('click', downloadJudgmentMarkdown);
 
     select.addEventListener('change', async () => {
         await applyRegionChoice(select.value);
