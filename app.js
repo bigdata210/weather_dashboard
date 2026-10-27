@@ -14,13 +14,22 @@ const DEFAULT_REGION = '세종';
 const AUTO_REFRESH_MS = 5 * 60 * 1000;   // 5분마다 자동 갱신
 const TICKER_MS = 30 * 1000;             // 'N분 전' 문구 다시 계산
 
+// 날씨 출처 두 곳. 판단은 kma 를 먼저 쓰고, 없으면 openMeteo 로 대체한다.
+const SOURCE_ORDER = ['kma', 'openMeteo'];
+const SOURCE_LABELS = {
+    kma: '기상청 단기예보',
+    openMeteo: 'Open-Meteo'
+};
+
+// 출처별 상태
+const sources = {
+    kma: { data: {}, lastUpdated: null, isLoading: false, error: null },
+    openMeteo: { data: {}, lastUpdated: null, isLoading: false, error: null }
+};
+
 // 화면 상태
-let weatherData = {};
-let lastUpdated = null;
-let dataSource = '';
 let currentRegion = null;
 let isAutoRegion = true;
-let isLoading = false;
 let tickerTimer = null;
 let autoRefreshTimer = null;
 let baseTasks = [];           // data/tasks.json 에서 읽은 일정
@@ -106,51 +115,55 @@ async function applyRegionChoice(choice) {
 // 날씨 받기
 // ─────────────────────────────────────────────
 
-// Vercel 서버리스 함수에서 날씨 데이터 받기
-async function fetchWeatherData() {
-    try {
-        const response = await fetch('/api/weather');
-        if (!response.ok) throw new Error('API response error');
+// 기상청 단기예보 (Vercel 서버리스 함수를 거친다)
+async function fetchKmaWeather() {
+    const response = await fetch('/api/weather');
+    const data = await response.json().catch(() => null);
 
-        const data = await response.json();
-        if (data.error) throw new Error(data.error);
-
-        dataSource = '기상청 단기예보';
-        return data;
-    } catch (e) {
-        console.warn('서버 날씨 API 오류, Open-Meteo로 폴백:', e);
-        dataSource = 'Open-Meteo 예보';
-        return fetchWeatherDataOpenMeteo();
+    if (!response.ok || !data) {
+        throw new Error((data && data.error) || '기상청 자료를 받지 못했습니다');
     }
+    if (data.error) throw new Error(data.error);
+
+    return data;
 }
 
-// Open-Meteo API (폴백용)
-async function fetchWeatherDataOpenMeteo() {
+// Open-Meteo 예보 (브라우저에서 바로 받는다)
+async function fetchOpenMeteoWeather() {
     const result = {};
 
-    try {
-        for (const [region, info] of Object.entries(REGIONS)) {
-            // wind_speed_unit=ms : 기본값이 km/h 라 기상청과 단위를 맞춘다
-            const url = `https://api.open-meteo.com/v1/forecast?latitude=${info.lat}&longitude=${info.lon}&daily=temperature_2m_max,wind_speed_10m_max,precipitation_probability_max&wind_speed_unit=ms&timezone=Asia/Seoul`;
+    for (const [region, info] of Object.entries(REGIONS)) {
+        // wind_speed_unit=ms : 기본값이 km/h 라 기상청과 단위를 맞춘다
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${info.lat}&longitude=${info.lon}&daily=temperature_2m_max,wind_speed_10m_max,precipitation_probability_max&wind_speed_unit=ms&timezone=Asia/Seoul`;
 
-            const response = await fetch(url);
-            if (!response.ok) throw new Error(`API error for ${region}`);
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`${region} 자료를 받지 못했습니다`);
 
-            const data = await response.json();
-            const daily = data.daily;
-
-            result[region] = {
-                maxTemp: daily.temperature_2m_max[0],
-                windSpeed: daily.wind_speed_10m_max[0],
-                rainProbability: daily.precipitation_probability_max[0]
-            };
-        }
-    } catch (e) {
-        console.error('Open-Meteo API 오류:', e);
-        dataSource = '날씨를 받지 못함';
+        const daily = (await response.json()).daily;
+        result[region] = {
+            maxTemp: daily.temperature_2m_max[0],
+            windSpeed: daily.wind_speed_10m_max[0],
+            rainProbability: daily.precipitation_probability_max[0]
+        };
     }
 
     return result;
+}
+
+const SOURCE_FETCHERS = {
+    kma: fetchKmaWeather,
+    openMeteo: fetchOpenMeteoWeather
+};
+
+// 판단에 쓸 출처 고르기 (기상청 우선, 없으면 Open-Meteo)
+function getJudgmentSourceKey() {
+    return SOURCE_ORDER.find(key => Object.keys(sources[key].data).length > 0) || null;
+}
+
+// 판단에 쓸 날씨 묶음
+function getJudgmentWeather() {
+    const key = getJudgmentSourceKey();
+    return key ? sources[key].data : {};
 }
 
 // ?test=wind 파라미터 처리
@@ -195,25 +208,29 @@ function formatClockTime(timestamp) {
     return `${hh}:${mm}`;
 }
 
-// 갱신 시각 칸 다시 그리기
+// 패널마다 갱신 시각 다시 그리기
 function renderUpdatedAt() {
-    const el = document.getElementById('weatherUpdated');
-    if (!lastUpdated) {
-        el.textContent = '';
-        el.removeAttribute('title');
-        return;
-    }
-    el.textContent = `${formatRelativeTime(lastUpdated)} 받음`;
-    el.title = `${formatClockTime(lastUpdated)} 기준`;
+    SOURCE_ORDER.forEach(key => {
+        const el = document.getElementById(`updated-${key}`);
+        const state = sources[key];
+
+        if (!state.lastUpdated) {
+            el.textContent = '';
+            el.removeAttribute('title');
+            return;
+        }
+        el.textContent = `${formatRelativeTime(state.lastUpdated)} 받음`;
+        el.title = `${formatClockTime(state.lastUpdated)} 기준`;
+    });
 }
 
-// 출처 칸 다시 그리기
+// 섹션 머리말 (측정 항목 안내 + 시험 배지)
 function renderSource() {
     const el = document.getElementById('weatherSource');
     el.textContent = '';
 
     const text = document.createElement('span');
-    text.textContent = `${dataSource} (최고 기온 · 최대 풍속 · 강수확률)`;
+    text.textContent = '최고 기온 · 최대 풍속 · 강수확률';
     el.appendChild(text);
 
     if (isWindTest()) {
@@ -222,6 +239,16 @@ function renderSource() {
         badge.textContent = '시험: wind';
         el.appendChild(badge);
     }
+}
+
+// 일정표의 판단이 어느 출처로 계산됐는지 표시
+function renderJudgmentSource() {
+    const el = document.getElementById('judgmentSource');
+    const key = getJudgmentSourceKey();
+
+    el.textContent = key
+        ? `판단 기준: ${SOURCE_LABELS[key]}`
+        : '판단 기준: 날씨를 받지 못해 판단할 수 없습니다';
 }
 
 // ─────────────────────────────────────────────
@@ -251,30 +278,30 @@ function createStat(label, value) {
     return stat;
 }
 
-// 오늘 날씨 섹션 렌더링 (현재 위치 한 곳만)
-function renderWeatherSummary() {
-    const grid = document.getElementById('weatherSummary');
-    grid.textContent = '';
+// 패널 한 개 그리기 (현재 위치 지역만)
+function renderPanel(key) {
+    const body = document.getElementById(`body-${key}`);
+    const state = sources[key];
+    body.textContent = '';
 
-    if (isLoading) {
+    if (state.isLoading) {
         const skeleton = document.createElement('div');
         skeleton.className = 'weather-skeleton';
         skeleton.textContent = '날씨를 받는 중…';
-        grid.appendChild(skeleton);
+        body.appendChild(skeleton);
         return;
     }
 
-    const weather = weatherData[currentRegion];
+    const weather = state.data[currentRegion];
     if (!weather) {
         const empty = document.createElement('div');
         empty.className = 'weather-empty';
-        empty.textContent = '날씨를 받지 못했습니다. 새로고침을 눌러 주세요.';
-        grid.appendChild(empty);
+        empty.textContent = state.error
+            ? `받지 못했습니다: ${state.error}`
+            : '날씨를 받지 못했습니다. 새로고침을 눌러 주세요.';
+        body.appendChild(empty);
         return;
     }
-
-    const card = document.createElement('div');
-    card.className = 'weather-card is-current';
 
     const name = document.createElement('div');
     name.className = 'region-name';
@@ -291,9 +318,13 @@ function renderWeatherSummary() {
     stats.appendChild(createStat('최대 풍속', `${weather.windSpeed}m/s`));
     stats.appendChild(createStat('강수확률', `${weather.rainProbability}%`));
 
-    card.appendChild(name);
-    card.appendChild(stats);
-    grid.appendChild(card);
+    body.appendChild(name);
+    body.appendChild(stats);
+}
+
+// 두 패널 모두 그리기
+function renderWeatherPanels() {
+    SOURCE_ORDER.forEach(renderPanel);
 }
 
 // 판단 결과를 클래스명으로 변환 (공백 제거)
@@ -304,10 +335,11 @@ function getJudgmentClass(judgment) {
 // 테이블에 일정 목록 렌더링
 function renderTasks(tasks) {
     const taskBody = document.getElementById('taskBody');
+    const judgmentWeather = getJudgmentWeather();
     taskBody.textContent = '';
 
     tasks.forEach(task => {
-        const weather = weatherData[task.region];
+        const weather = judgmentWeather[task.region];
         const judgment = judgeTask(task, weather);
 
         const row = document.createElement('tr');
@@ -333,8 +365,9 @@ function renderTasks(tasks) {
 function renderAll() {
     renderSource();
     renderUpdatedAt();
-    renderWeatherSummary();
+    renderWeatherPanels();
     renderDataNotice();
+    renderJudgmentSource();
     renderTasks(getAllTasks());
     updateSaveButtonState();
 }
@@ -448,7 +481,8 @@ function updateSaveButtonState() {
     const button = document.getElementById('saveMdBtn');
     if (!button) return;
 
-    const ready = !isLoading && Object.keys(weatherData).length > 0;
+    const anyLoading = SOURCE_ORDER.some(key => sources[key].isLoading);
+    const ready = !anyLoading && getJudgmentSourceKey() !== null;
     button.disabled = !ready;
     button.title = ready ? '' : '날씨를 받은 뒤에 저장할 수 있습니다';
 }
@@ -456,7 +490,13 @@ function updateSaveButtonState() {
 // 오늘 판단을 md 파일로 내려받기
 function downloadJudgmentMarkdown() {
     const dateString = getTodayString();
-    const markdown = buildJudgmentMarkdown(getAllTasks(), weatherData, dateString);
+    const sourceKey = getJudgmentSourceKey();
+    const markdown = buildJudgmentMarkdown(
+        getAllTasks(),
+        getJudgmentWeather(),
+        dateString,
+        sourceKey ? SOURCE_LABELS[sourceKey] : ''
+    );
 
     const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -475,39 +515,52 @@ function downloadJudgmentMarkdown() {
 // 날씨 새로고침
 // ─────────────────────────────────────────────
 
-async function refreshWeather() {
-    if (isLoading) return;
+// 출처 한 곳만 새로 받기
+async function refreshSource(key) {
+    const state = sources[key];
+    if (state.isLoading) return;
 
-    const button = document.getElementById('refreshBtn');
-    isLoading = true;
+    const button = document.getElementById(`refresh-${key}`);
+    state.isLoading = true;
     button.disabled = true;
     button.textContent = '받는 중…';
     updateSaveButtonState();
-    renderWeatherSummary();
+    renderPanel(key);
 
     try {
-        const data = await fetchWeatherData();
-        weatherData = applyTestParameters(data);
-        lastUpdated = Date.now();
+        state.data = applyTestParameters(await SOURCE_FETCHERS[key]());
+        state.lastUpdated = Date.now();
+        state.error = null;
+    } catch (e) {
+        console.error(`${SOURCE_LABELS[key]} 오류:`, e);
+        state.data = {};
+        state.error = e.message;
     } finally {
-        isLoading = false;
+        state.isLoading = false;
         button.disabled = false;
         button.textContent = '새로고침';
         renderAll();
     }
 }
 
+// 두 출처를 같이 받기
+function refreshAllSources() {
+    return Promise.all(SOURCE_ORDER.map(refreshSource));
+}
+
 // 5분마다 자동 갱신
 function startAutoRefresh() {
     if (autoRefreshTimer) clearInterval(autoRefreshTimer);
-    autoRefreshTimer = setInterval(refreshWeather, AUTO_REFRESH_MS);
+    autoRefreshTimer = setInterval(refreshAllSources, AUTO_REFRESH_MS);
 }
 
 // 다른 탭에 갔다 돌아왔을 때, 받은 지 5분이 넘었으면 다시 받기
 function handleVisibilityChange() {
     if (document.visibilityState !== 'visible') return;
-    if (!lastUpdated || Date.now() - lastUpdated >= AUTO_REFRESH_MS) {
-        refreshWeather();
+
+    const oldest = Math.min(...SOURCE_ORDER.map(key => sources[key].lastUpdated || 0));
+    if (Date.now() - oldest >= AUTO_REFRESH_MS) {
+        refreshAllSources();
     } else {
         renderUpdatedAt();
     }
@@ -524,8 +577,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 버튼부터 먼저 연결한다. 날씨를 받는 동안에도 눌리게 하려는 것이 아니라,
     // 눌렀을 때 아무 반응이 없는 상태를 만들지 않기 위해서다.
-    document.getElementById('refreshBtn')
-        .addEventListener('click', refreshWeather);
+    SOURCE_ORDER.forEach(key => {
+        document.getElementById(`refresh-${key}`)
+            .addEventListener('click', () => refreshSource(key));
+    });
 
     document.getElementById('saveMdBtn')
         .addEventListener('click', downloadJudgmentMarkdown);
@@ -550,7 +605,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     await applyRegionChoice(select.value);
-    await refreshWeather();
+    renderSource();
+    await refreshAllSources();
 
     // 'N분 전' 문구를 30초마다 다시 계산
     tickerTimer = setInterval(renderUpdatedAt, TICKER_MS);

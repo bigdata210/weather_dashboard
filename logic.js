@@ -13,13 +13,15 @@ function escapeTableCell(text) {
 }
 
 // 오늘 판단을 마크다운 문서로 만들기
-function buildJudgmentMarkdown(tasks, weatherData, dateString) {
-    const lines = [
-        `# 현장 일정 판단 (${dateString})`,
-        '',
+function buildJudgmentMarkdown(tasks, weatherData, dateString, sourceLabel) {
+    const lines = [`# 현장 일정 판단 (${dateString})`, ''];
+
+    if (sourceLabel) lines.push(`날씨 출처: ${sourceLabel}`, '');
+
+    lines.push(
         '| 일정 | 지역 | 구분 | 담당 | 날씨 | 판단 |',
         '|---|---|---|---|---|---|'
-    ];
+    );
 
     tasks.forEach(task => {
         const weather = weatherData[task.region];

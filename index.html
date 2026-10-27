@@ -14,12 +14,8 @@
         <section class="weather-summary">
             <div class="section-head">
                 <h2>오늘 날씨</h2>
-                <div class="weather-meta">
-                    <span id="weatherUpdated" class="weather-updated"></span>
-                    <button type="button" id="refreshBtn" class="btn-refresh">새로고침</button>
-                </div>
+                <span id="weatherSource" class="weather-source"></span>
             </div>
-            <div id="weatherSource" class="weather-source"></div>
             <div class="region-picker">
                 <label for="regionSelect">기준 지역</label>
                 <select id="regionSelect">
@@ -31,8 +27,28 @@
                 </select>
                 <span id="locationStatus" class="location-status"></span>
             </div>
-            <div id="weatherSummary" class="weather-grid">
-                <!-- app.js에서 동적으로 생성 -->
+            <div class="weather-panels">
+                <div class="weather-panel">
+                    <div class="panel-head">
+                        <span class="panel-title">기상청 단기예보</span>
+                        <span class="panel-updated" id="updated-kma"></span>
+                        <button type="button" class="btn-refresh" id="refresh-kma">새로고침</button>
+                    </div>
+                    <div class="panel-body" id="body-kma">
+                        <!-- app.js에서 동적으로 생성 -->
+                    </div>
+                </div>
+
+                <div class="weather-panel">
+                    <div class="panel-head">
+                        <span class="panel-title">Open-Meteo</span>
+                        <span class="panel-updated" id="updated-openMeteo"></span>
+                        <button type="button" class="btn-refresh" id="refresh-openMeteo">새로고침</button>
+                    </div>
+                    <div class="panel-body" id="body-openMeteo">
+                        <!-- app.js에서 동적으로 생성 -->
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -42,6 +58,7 @@
                 <button type="button" id="saveMdBtn" class="btn-refresh">오늘 판단 md로 저장</button>
             </div>
             <div id="dataNotice" class="data-notice" hidden></div>
+            <div id="judgmentSource" class="judgment-source"></div>
             <table>
                 <thead>
                     <tr>

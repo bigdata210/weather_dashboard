@@ -137,11 +137,49 @@ h2 {
     color: #7f8c8d;
 }
 
-.weather-card {
-    background-color: #eaf4fc;
-    padding: 16px 20px;
+.weather-panels {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+}
+
+.weather-panel {
+    border: 1px solid #d7dde2;
     border-radius: 6px;
-    border-left: 4px solid #1f6fb2;
+    overflow: hidden;
+}
+
+.panel-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background-color: #ecf0f1;
+    border-bottom: 1px solid #d7dde2;
+}
+
+.panel-title {
+    font-weight: 600;
+    font-size: 13px;
+    color: #2c3e50;
+}
+
+.panel-updated {
+    margin-left: auto;
+    font-size: 11px;
+    color: #7f8c8d;
+    white-space: nowrap;
+}
+
+.panel-body {
+    padding: 14px 16px;
+    background-color: #eaf4fc;
+}
+
+.judgment-source {
+    font-size: 12px;
+    color: #7f8c8d;
+    margin-bottom: 12px;
 }
 
 .weather-empty,
@@ -205,6 +243,10 @@ h2 {
     .region-picker {
         flex-direction: column;
         align-items: flex-start;
+    }
+
+    .weather-panels {
+        grid-template-columns: 1fr;
     }
 }
 
