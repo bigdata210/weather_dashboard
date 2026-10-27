@@ -1,3 +1,11 @@
+// 지역별 좌표 (Open-Meteo API용)
+const regionCoordinates = {
+    세종: { lat: 36.48, lon: 127.29 },
+    대전: { lat: 36.32, lon: 127.43 },
+    태안: { lat: 36.95, lon: 126.37 },
+    보령: { lat: 36.27, lon: 126.57 }
+};
+
 // 초기 가상 데이터
 const initialTasks = [
     { title: "다중이용시설 안전점검", region: "세종", kind: "야외", owner: "김안전" },
@@ -9,6 +17,53 @@ const initialTasks = [
 ];
 
 const STORAGE_KEY = 'tasks';
+
+// Open-Meteo API로 날씨 데이터 받기
+async function fetchWeatherData() {
+    const weatherData = {};
+
+    try {
+        for (const [region, coords] of Object.entries(regionCoordinates)) {
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lon}&daily=temperature_2m_max,wind_speed_10m_max,precipitation_probability_max&timezone=Asia/Seoul`;
+
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`API error for ${region}`);
+
+            const data = await response.json();
+            const daily = data.daily;
+
+            weatherData[region] = {
+                maxTemp: daily.temperature_2m_max[0],
+                windSpeed: daily.wind_speed_10m_max[0],
+                rainProbability: daily.precipitation_probability_max[0]
+            };
+        }
+    } catch (e) {
+        console.error('날씨 API 오류:', e);
+    }
+
+    return weatherData;
+}
+
+// ?test=wind 파라미터 처리
+function applyTestParameters(weatherData) {
+    const params = new URLSearchParams(window.location.search);
+    const testWind = params.get('test');
+
+    if (testWind === 'wind') {
+        for (const region in weatherData) {
+            weatherData[region].windSpeed = 12;
+        }
+    }
+
+    return weatherData;
+}
+
+// 날씨 문자열 만들기
+function getWeatherString(weather) {
+    if (!weather) return '날씨 확인 전';
+    return `${weather.maxTemp}°C, ${weather.windSpeed}m/s, ${weather.rainProbability}%`;
+}
 
 // LocalStorage에서 일정 불러오기
 function loadTasks() {
@@ -30,28 +85,34 @@ function saveTasks(tasks) {
 }
 
 // 테이블에 일정 목록 렌더링
-function renderTasks(tasks) {
+function renderTasks(tasks, weatherData = {}) {
     const taskBody = document.getElementById('taskBody');
     taskBody.innerHTML = '';
 
     tasks.forEach(task => {
+        const weather = weatherData[task.region];
+        const judgment = judgeTask(task, weather);
+        const weatherString = getWeatherString(weather);
+
         const row = document.createElement('tr');
         row.innerHTML = `
             <td>${task.title}</td>
             <td>${task.region}</td>
             <td>${task.kind}</td>
             <td>${task.owner}</td>
+            <td>${weatherString}</td>
+            <td>${judgment}</td>
         `;
         taskBody.appendChild(row);
     });
 }
 
 // 일정 추가
-function addTask(title, region, kind, owner) {
+function addTask(title, region, kind, owner, weatherData = {}) {
     const tasks = loadTasks();
     tasks.push({ title, region, kind, owner });
     saveTasks(tasks);
-    renderTasks(tasks);
+    renderTasks(tasks, weatherData);
 }
 
 // 오늘 날짜 표시 (YYYY-MM-DD)
@@ -69,10 +130,15 @@ function displayTodayDate() {
 }
 
 // 초기 로드
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     displayTodayDate();
     const tasks = loadTasks();
-    renderTasks(tasks);
+
+    // API로 날씨 데이터 받기
+    let weatherData = await fetchWeatherData();
+    weatherData = applyTestParameters(weatherData);
+
+    renderTasks(tasks, weatherData);
 
     // 폼 제출 이벤트
     const form = document.getElementById('addTaskForm');
@@ -85,7 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const owner = document.getElementById('taskOwner').value;
 
         if (title && region && kind && owner) {
-            addTask(title, region, kind, owner);
+            addTask(title, region, kind, owner, weatherData);
             form.reset();
         }
     });
