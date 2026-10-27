@@ -1,9 +1,9 @@
-// 지역별 좌표 (Open-Meteo API용)
+// 지역별 격자 좌표 (기상단기예보 API용)
 const regionCoordinates = {
-    세종: { lat: 36.48, lon: 127.29 },
-    대전: { lat: 36.32, lon: 127.43 },
-    태안: { lat: 36.95, lon: 126.37 },
-    보령: { lat: 36.27, lon: 126.57 }
+    세종: { nx: 60, ny: 127 },
+    대전: { nx: 68, ny: 100 },
+    태안: { nx: 52, ny: 38 },
+    보령: { nx: 56, ny: 79 }
 };
 
 // 초기 가상 데이터
@@ -18,8 +18,55 @@ const initialTasks = [
 
 const STORAGE_KEY = 'tasks';
 
-// Open-Meteo API로 날씨 데이터 받기
+// 기상단기예보 API로 날씨 데이터 받기
 async function fetchWeatherData() {
+    const weatherData = {};
+    const apiKey = 'REDACTED_API_KEY';
+
+    try {
+        // 기준 날짜·시간 설정 (현재 시간 기준 최신 발표 시간)
+        const now = new Date();
+        const baseDate = now.toISOString().slice(0, 10).replace(/-/g, '');
+        const hour = Math.floor(now.getHours() / 3) * 3;
+        const baseTime = `${String(hour).padStart(2, '0')}00`;
+
+        for (const [region, coords] of Object.entries(regionCoordinates)) {
+            const url = `https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst?serviceKey=${apiKey}&pageNo=1&numOfRows=60&dataType=JSON&base_date=${baseDate}&base_time=${baseTime}&nx=${coords.nx}&ny=${coords.ny}`;
+
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`API error for ${region}`);
+
+            const data = await response.json();
+            const items = data.response.body.items.item;
+
+            // 카테고리별로 데이터 분류
+            const tempValues = [];
+            const windValues = [];
+            const rainValues = [];
+
+            items.forEach(item => {
+                if (item.category === 'TMP') tempValues.push(parseFloat(item.fcstValue));
+                if (item.category === 'WSD') windValues.push(parseFloat(item.fcstValue));
+                if (item.category === 'POP') rainValues.push(parseFloat(item.fcstValue));
+            });
+
+            weatherData[region] = {
+                maxTemp: Math.max(...tempValues),
+                windSpeed: Math.max(...windValues),
+                rainProbability: Math.max(...rainValues)
+            };
+        }
+    } catch (e) {
+        console.error('기상단기예보 API 오류:', e);
+        // Open-Meteo API로 폴백 (주석처리된 상태)
+        // return fetchWeatherDataOpenMeteo();
+    }
+
+    return weatherData;
+}
+
+/* Open-Meteo API (백업)
+async function fetchWeatherDataOpenMeteo() {
     const weatherData = {};
 
     try {
@@ -39,11 +86,12 @@ async function fetchWeatherData() {
             };
         }
     } catch (e) {
-        console.error('날씨 API 오류:', e);
+        console.error('Open-Meteo API 오류:', e);
     }
 
     return weatherData;
 }
+*/
 
 // ?test=wind 파라미터 처리
 function applyTestParameters(weatherData) {
