@@ -113,9 +113,9 @@ tbody td:nth-child(6) {
 
 /* 판단 상태별 색상 */
 .judgment-진행 {
-    background-color: #d5f4e6;
+    background-color: #ffffff;
     color: #27ae60;
-    font-weight: 500;
+    font-weight: 700;
 }
 
 .judgment-폭염휴식 {
@@ -133,13 +133,13 @@ tbody td:nth-child(6) {
 .judgment-중지검토 {
     background-color: #fadbd8;
     color: #c0392b;
-    font-weight: 500;
+    font-weight: 700;
 }
 
 .judgment-영향없음 {
-    background-color: #e8eaed;
-    color: #555;
-    font-weight: 500;
+    background-color: transparent;
+    color: #333;
+    font-weight: 700;
 }
 
 .judgment-날씨확인전 {
