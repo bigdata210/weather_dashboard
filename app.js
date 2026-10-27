@@ -17,14 +17,20 @@ const initialTasks = [
 ];
 
 const STORAGE_KEY = 'tasks';
+const REGION_PREF_KEY = 'regionPref';
 const DEFAULT_REGION = '세종';
+const AUTO_REFRESH_MS = 5 * 60 * 1000;   // 5분마다 자동 갱신
+const TICKER_MS = 30 * 1000;             // 'N분 전' 문구 다시 계산
 
 // 화면 상태
 let weatherData = {};
 let lastUpdated = null;
 let dataSource = '';
 let currentRegion = null;
+let isAutoRegion = true;
+let isLoading = false;
 let tickerTimer = null;
+let autoRefreshTimer = null;
 
 // ─────────────────────────────────────────────
 // 현재 위치
@@ -76,16 +82,29 @@ function getCurrentPosition() {
 async function detectCurrentRegion() {
     const statusEl = document.getElementById('locationStatus');
     statusEl.textContent = '현재 위치 확인 중…';
+    isAutoRegion = true;
 
     try {
         const coords = await getCurrentPosition();
         const nearest = findNearestRegion(coords.latitude, coords.longitude);
         currentRegion = nearest.region;
-        statusEl.textContent =
-            `현재 위치 기준: ${nearest.region} (약 ${Math.round(nearest.distance)}km)`;
+        statusEl.textContent = `가장 가까운 지역 · 약 ${Math.round(nearest.distance)}km`;
     } catch (e) {
         currentRegion = DEFAULT_REGION;
-        statusEl.textContent = `위치를 확인할 수 없어 ${DEFAULT_REGION} 기준으로 봅니다`;
+        statusEl.textContent = `위치를 확인할 수 없어 ${DEFAULT_REGION} 기준`;
+    }
+}
+
+// 드롭다운에서 고른 지역으로 기준 바꾸기
+async function applyRegionChoice(choice) {
+    localStorage.setItem(REGION_PREF_KEY, choice);
+
+    if (choice === 'auto') {
+        await detectCurrentRegion();
+    } else {
+        isAutoRegion = false;
+        currentRegion = choice;
+        document.getElementById('locationStatus').textContent = '직접 고른 지역';
     }
 }
 
@@ -220,13 +239,39 @@ function getWeatherString(weather) {
     return `${weather.maxTemp}°C · ${weather.windSpeed}m/s · ${weather.rainProbability}%`;
 }
 
-// 오늘 날씨 섹션 렌더링
+// 수치 한 칸 만들기
+function createStat(label, value) {
+    const stat = document.createElement('div');
+    stat.className = 'stat';
+
+    const labelEl = document.createElement('div');
+    labelEl.className = 'stat-label';
+    labelEl.textContent = label;
+
+    const valueEl = document.createElement('div');
+    valueEl.className = 'stat-value';
+    valueEl.textContent = value;
+
+    stat.appendChild(labelEl);
+    stat.appendChild(valueEl);
+    return stat;
+}
+
+// 오늘 날씨 섹션 렌더링 (현재 위치 한 곳만)
 function renderWeatherSummary() {
     const grid = document.getElementById('weatherSummary');
     grid.textContent = '';
 
-    const regions = Object.keys(REGIONS);
-    if (regions.every(region => !weatherData[region])) {
+    if (isLoading) {
+        const skeleton = document.createElement('div');
+        skeleton.className = 'weather-skeleton';
+        skeleton.textContent = '날씨를 받는 중…';
+        grid.appendChild(skeleton);
+        return;
+    }
+
+    const weather = weatherData[currentRegion];
+    if (!weather) {
         const empty = document.createElement('div');
         empty.className = 'weather-empty';
         empty.textContent = '날씨를 받지 못했습니다. 새로고침을 눌러 주세요.';
@@ -234,30 +279,27 @@ function renderWeatherSummary() {
         return;
     }
 
-    regions.forEach(region => {
-        const card = document.createElement('div');
-        card.className = 'weather-card';
-        if (region === currentRegion) card.classList.add('is-current');
+    const card = document.createElement('div');
+    card.className = 'weather-card is-current';
 
-        const name = document.createElement('div');
-        name.className = 'region-name';
-        name.textContent = region;
+    const name = document.createElement('div');
+    name.className = 'region-name';
+    name.textContent = currentRegion;
 
-        if (region === currentRegion) {
-            const badge = document.createElement('span');
-            badge.className = 'badge-current';
-            badge.textContent = '현재 위치';
-            name.appendChild(badge);
-        }
+    const badge = document.createElement('span');
+    badge.className = 'badge-current';
+    badge.textContent = isAutoRegion ? '현재 위치' : '직접 선택';
+    name.appendChild(badge);
 
-        const info = document.createElement('div');
-        info.className = 'weather-info';
-        info.textContent = getWeatherString(weatherData[region]);
+    const stats = document.createElement('div');
+    stats.className = 'stat-row';
+    stats.appendChild(createStat('최고 기온', `${weather.maxTemp}°C`));
+    stats.appendChild(createStat('최대 풍속', `${weather.windSpeed}m/s`));
+    stats.appendChild(createStat('강수확률', `${weather.rainProbability}%`));
 
-        card.appendChild(name);
-        card.appendChild(info);
-        grid.appendChild(card);
-    });
+    card.appendChild(name);
+    card.appendChild(stats);
+    grid.appendChild(card);
 }
 
 // 판단 결과를 클래스명으로 변환 (공백 제거)
@@ -350,18 +392,39 @@ function displayTodayDate() {
 // ─────────────────────────────────────────────
 
 async function refreshWeather() {
+    if (isLoading) return;
+
     const button = document.getElementById('refreshBtn');
+    isLoading = true;
     button.disabled = true;
     button.textContent = '받는 중…';
+    renderWeatherSummary();
 
     try {
         const data = await fetchWeatherData();
         weatherData = applyTestParameters(data);
         lastUpdated = Date.now();
     } finally {
+        isLoading = false;
         button.disabled = false;
         button.textContent = '새로고침';
         renderAll();
+    }
+}
+
+// 5분마다 자동 갱신
+function startAutoRefresh() {
+    if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+    autoRefreshTimer = setInterval(refreshWeather, AUTO_REFRESH_MS);
+}
+
+// 다른 탭에 갔다 돌아왔을 때, 받은 지 5분이 넘었으면 다시 받기
+function handleVisibilityChange() {
+    if (document.visibilityState !== 'visible') return;
+    if (!lastUpdated || Date.now() - lastUpdated >= AUTO_REFRESH_MS) {
+        refreshWeather();
+    } else {
+        renderUpdatedAt();
     }
 }
 
@@ -373,14 +436,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     displayTodayDate();
     renderTasks(loadTasks());
 
-    await detectCurrentRegion();
+    // 지난번에 고른 기준 지역 복원
+    const select = document.getElementById('regionSelect');
+    const savedChoice = localStorage.getItem(REGION_PREF_KEY);
+    if (savedChoice && (savedChoice === 'auto' || REGIONS[savedChoice])) {
+        select.value = savedChoice;
+    }
+
+    await applyRegionChoice(select.value);
     await refreshWeather();
 
     // 'N분 전' 문구를 30초마다 다시 계산
-    tickerTimer = setInterval(renderUpdatedAt, 30000);
+    tickerTimer = setInterval(renderUpdatedAt, TICKER_MS);
+    startAutoRefresh();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     document.getElementById('refreshBtn')
         .addEventListener('click', refreshWeather);
+
+    select.addEventListener('change', async () => {
+        await applyRegionChoice(select.value);
+        renderAll();
+    });
 
     // 폼 제출 이벤트
     const form = document.getElementById('addTaskForm');

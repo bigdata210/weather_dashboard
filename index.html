@@ -20,7 +20,17 @@
                 </div>
             </div>
             <div id="weatherSource" class="weather-source"></div>
-            <div id="locationStatus" class="location-status"></div>
+            <div class="region-picker">
+                <label for="regionSelect">기준 지역</label>
+                <select id="regionSelect">
+                    <option value="auto">현재 위치 (자동)</option>
+                    <option value="세종">세종</option>
+                    <option value="대전">대전</option>
+                    <option value="태안">태안</option>
+                    <option value="보령">보령</option>
+                </select>
+                <span id="locationStatus" class="location-status"></span>
+            </div>
             <div id="weatherSummary" class="weather-grid">
                 <!-- app.js에서 동적으로 생성 -->
             </div>
