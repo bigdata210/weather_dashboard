@@ -65,6 +65,22 @@ function getWeatherString(weather) {
     return `${weather.maxTemp}°C, ${weather.windSpeed}m/s, ${weather.rainProbability}%`;
 }
 
+// 오늘 날씨 섹션 렌더링
+function renderWeatherSummary(weatherData) {
+    const weatherSummary = document.getElementById('weatherSummary');
+    weatherSummary.innerHTML = '';
+
+    for (const [region, weather] of Object.entries(weatherData)) {
+        const card = document.createElement('div');
+        card.className = 'weather-card';
+        card.innerHTML = `
+            <div class="region-name">${region}</div>
+            <div class="weather-info">${getWeatherString(weather)}</div>
+        `;
+        weatherSummary.appendChild(card);
+    }
+}
+
 // LocalStorage에서 일정 불러오기
 function loadTasks() {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -84,6 +100,11 @@ function saveTasks(tasks) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
 }
 
+// 판단 결과를 클래스명으로 변환
+function getJudgmentClass(judgment) {
+    return `judgment-${judgment}`;
+}
+
 // 테이블에 일정 목록 렌더링
 function renderTasks(tasks, weatherData = {}) {
     const taskBody = document.getElementById('taskBody');
@@ -93,6 +114,7 @@ function renderTasks(tasks, weatherData = {}) {
         const weather = weatherData[task.region];
         const judgment = judgeTask(task, weather);
         const weatherString = getWeatherString(weather);
+        const judgmentClass = getJudgmentClass(judgment);
 
         const row = document.createElement('tr');
         row.innerHTML = `
@@ -101,7 +123,7 @@ function renderTasks(tasks, weatherData = {}) {
             <td>${task.kind}</td>
             <td>${task.owner}</td>
             <td>${weatherString}</td>
-            <td>${judgment}</td>
+            <td class="${judgmentClass}">${judgment}</td>
         `;
         taskBody.appendChild(row);
     });
@@ -138,6 +160,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let weatherData = await fetchWeatherData();
     weatherData = applyTestParameters(weatherData);
 
+    renderWeatherSummary(weatherData);
     renderTasks(tasks, weatherData);
 
     // 폼 제출 이벤트
