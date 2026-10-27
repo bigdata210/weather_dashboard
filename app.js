@@ -54,8 +54,23 @@ function addTask(title, region, kind, owner) {
     renderTasks(tasks);
 }
 
+// 오늘 날짜 표시 (YYYY-MM-DD)
+function displayTodayDate() {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const date = String(today.getDate()).padStart(2, '0');
+    const dateString = `${year}-${month}-${date}`;
+
+    const todayDateEl = document.getElementById('todayDate');
+    if (todayDateEl) {
+        todayDateEl.textContent = dateString;
+    }
+}
+
 // 초기 로드
 document.addEventListener('DOMContentLoaded', () => {
+    displayTodayDate();
     const tasks = loadTasks();
     renderTasks(tasks);
 

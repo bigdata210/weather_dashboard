@@ -21,10 +21,17 @@ body {
 }
 
 h1 {
-    margin-bottom: 30px;
+    margin-bottom: 10px;
     font-size: 24px;
     text-align: center;
     color: #2c3e50;
+}
+
+.today-date {
+    text-align: center;
+    font-size: 14px;
+    color: #7f8c8d;
+    margin-bottom: 30px;
 }
 
 h2 {
@@ -104,7 +111,7 @@ select:focus {
 }
 
 .btn-add {
-    background-color: #3498db;
+    background-color: #e74c3c;
     color: white;
     border: none;
     padding: 10px 20px;
@@ -116,9 +123,9 @@ select:focus {
 }
 
 .btn-add:hover {
-    background-color: #2980b9;
+    background-color: #c0392b;
 }
 
 .btn-add:active {
-    background-color: #21618c;
+    background-color: #a93226;
 }
