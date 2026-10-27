@@ -12,7 +12,15 @@
         <div id="todayDate" class="today-date"></div>
 
         <section class="weather-summary">
-            <h2>오늘 날씨</h2>
+            <div class="section-head">
+                <h2>오늘 날씨</h2>
+                <div class="weather-meta">
+                    <span id="weatherUpdated" class="weather-updated"></span>
+                    <button type="button" id="refreshBtn" class="btn-refresh">새로고침</button>
+                </div>
+            </div>
+            <div id="weatherSource" class="weather-source"></div>
+            <div id="locationStatus" class="location-status"></div>
             <div id="weatherSummary" class="weather-grid">
                 <!-- app.js에서 동적으로 생성 -->
             </div>
