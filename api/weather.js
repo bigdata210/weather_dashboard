@@ -12,12 +12,12 @@ export default async function handler(req, res) {
         const hour = Math.floor(now.getHours() / 3) * 3;
         const baseTime = `${String(hour).padStart(2, '0')}00`;
 
-        // 지역별 격자 좌표
+        // 지역별 기상청 동네예보 격자 좌표
         const regionCoordinates = {
-            세종: { nx: 60, ny: 127 },
-            대전: { nx: 68, ny: 100 },
-            태안: { nx: 52, ny: 38 },
-            보령: { nx: 56, ny: 79 }
+            세종: { nx: 66, ny: 103 },
+            대전: { nx: 67, ny: 100 },
+            태안: { nx: 51, ny: 109 },
+            보령: { nx: 54, ny: 100 }
         };
 
         const weatherData = {};
