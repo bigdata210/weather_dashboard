@@ -336,6 +336,7 @@ function renderAll() {
     renderWeatherSummary();
     renderDataNotice();
     renderTasks(getAllTasks());
+    updateSaveButtonState();
 }
 
 // ─────────────────────────────────────────────
@@ -442,6 +443,16 @@ function displayTodayDate() {
     }
 }
 
+// 날씨를 받기 전에는 md 저장 버튼을 잠가 둔다
+function updateSaveButtonState() {
+    const button = document.getElementById('saveMdBtn');
+    if (!button) return;
+
+    const ready = !isLoading && Object.keys(weatherData).length > 0;
+    button.disabled = !ready;
+    button.title = ready ? '' : '날씨를 받은 뒤에 저장할 수 있습니다';
+}
+
 // 오늘 판단을 md 파일로 내려받기
 function downloadJudgmentMarkdown() {
     const dateString = getTodayString();
@@ -471,6 +482,7 @@ async function refreshWeather() {
     isLoading = true;
     button.disabled = true;
     button.textContent = '받는 중…';
+    updateSaveButtonState();
     renderWeatherSummary();
 
     try {
@@ -508,6 +520,23 @@ function handleVisibilityChange() {
 document.addEventListener('DOMContentLoaded', async () => {
     displayTodayDate();
 
+    const select = document.getElementById('regionSelect');
+
+    // 버튼부터 먼저 연결한다. 날씨를 받는 동안에도 눌리게 하려는 것이 아니라,
+    // 눌렀을 때 아무 반응이 없는 상태를 만들지 않기 위해서다.
+    document.getElementById('refreshBtn')
+        .addEventListener('click', refreshWeather);
+
+    document.getElementById('saveMdBtn')
+        .addEventListener('click', downloadJudgmentMarkdown);
+
+    select.addEventListener('change', async () => {
+        await applyRegionChoice(select.value);
+        renderAll();
+    });
+
+    updateSaveButtonState();
+
     // 일정은 data/tasks.json 을 먼저 읽고, 추가한 일정을 뒤에 붙인다
     baseTasks = await loadBaseTasks();
     migrateLegacyTasks();
@@ -515,7 +544,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderTasks(getAllTasks());
 
     // 지난번에 고른 기준 지역 복원
-    const select = document.getElementById('regionSelect');
     const savedChoice = localStorage.getItem(REGION_PREF_KEY);
     if (savedChoice && (savedChoice === 'auto' || REGIONS[savedChoice])) {
         select.value = savedChoice;
@@ -528,17 +556,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     tickerTimer = setInterval(renderUpdatedAt, TICKER_MS);
     startAutoRefresh();
     document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    document.getElementById('refreshBtn')
-        .addEventListener('click', refreshWeather);
-
-    document.getElementById('saveMdBtn')
-        .addEventListener('click', downloadJudgmentMarkdown);
-
-    select.addEventListener('change', async () => {
-        await applyRegionChoice(select.value);
-        renderAll();
-    });
 
     // 폼 제출 이벤트
     const form = document.getElementById('addTaskForm');
