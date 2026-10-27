@@ -6,17 +6,9 @@ const REGIONS = {
     보령: { nx: 56, ny: 79, lat: 36.27, lon: 126.57 }
 };
 
-// 초기 가상 데이터
-const initialTasks = [
-    { title: "다중이용시설 안전점검", region: "세종", kind: "야외", owner: "김안전" },
-    { title: "시민 안전체험 행사 운영", region: "보령", kind: "야외", owner: "이행사" },
-    { title: "옥상 태양광 설비 점검", region: "태안", kind: "고소", owner: "박설비" },
-    { title: "하천 수위계 확인", region: "대전", kind: "야외", owner: "최현장" },
-    { title: "청사 외벽 간판 보수", region: "세종", kind: "고소", owner: "정시설" },
-    { title: "비상연락 훈련", region: "대전", kind: "실내", owner: "한상황" }
-];
-
-const STORAGE_KEY = 'tasks';
+const TASKS_URL = 'data/tasks.json';
+const ADDED_TASKS_KEY = 'addedTasks';   // 화면에서 추가한 일정만 저장
+const LEGACY_TASKS_KEY = 'tasks';       // 예전 버전이 쓰던 칸
 const REGION_PREF_KEY = 'regionPref';
 const DEFAULT_REGION = '세종';
 const AUTO_REFRESH_MS = 5 * 60 * 1000;   // 5분마다 자동 갱신
@@ -31,6 +23,8 @@ let isAutoRegion = true;
 let isLoading = false;
 let tickerTimer = null;
 let autoRefreshTimer = null;
+let baseTasks = [];           // data/tasks.json 에서 읽은 일정
+let baseTasksLoaded = false;  // 파일을 읽었는지
 
 // ─────────────────────────────────────────────
 // 현재 위치
@@ -340,38 +334,95 @@ function renderAll() {
     renderSource();
     renderUpdatedAt();
     renderWeatherSummary();
-    renderTasks(loadTasks());
+    renderDataNotice();
+    renderTasks(getAllTasks());
 }
 
 // ─────────────────────────────────────────────
 // 저장 · 추가
 // ─────────────────────────────────────────────
 
-// LocalStorage에서 일정 불러오기
-function loadTasks() {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-        try {
-            return JSON.parse(stored);
-        } catch (e) {
-            console.error('일정 불러오기 실패:', e);
-            return initialTasks;
-        }
+// data/tasks.json 에서 기본 일정 읽기
+async function loadBaseTasks() {
+    try {
+        const response = await fetch(TASKS_URL);
+        if (!response.ok) throw new Error(`${TASKS_URL} 응답 오류`);
+
+        const data = await response.json();
+        if (!Array.isArray(data)) throw new Error(`${TASKS_URL} 형식 오류`);
+
+        baseTasksLoaded = true;
+        return data;
+    } catch (e) {
+        console.error('일정 파일을 읽지 못했습니다:', e);
+        baseTasksLoaded = false;
+        return [];
     }
-    return initialTasks;
 }
 
-// LocalStorage에 일정 저장
-function saveTasks(tasks) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+// 화면에서 추가한 일정 불러오기
+function loadAddedTasks() {
+    const stored = localStorage.getItem(ADDED_TASKS_KEY);
+    if (!stored) return [];
+
+    try {
+        const data = JSON.parse(stored);
+        return Array.isArray(data) ? data : [];
+    } catch (e) {
+        console.error('추가한 일정 불러오기 실패:', e);
+        return [];
+    }
 }
 
-// 일정 추가
+// 화면에서 추가한 일정 저장
+function saveAddedTasks(tasks) {
+    localStorage.setItem(ADDED_TASKS_KEY, JSON.stringify(tasks));
+}
+
+// 일정 하나를 비교용 글자로 만들기
+function getTaskKey(task) {
+    return [task.title, task.region, task.kind, task.owner].join('|');
+}
+
+// 예전 버전이 저장한 목록에서 추가분만 옮겨오기 (한 번만)
+function migrateLegacyTasks() {
+    const legacy = localStorage.getItem(LEGACY_TASKS_KEY);
+    if (!legacy || localStorage.getItem(ADDED_TASKS_KEY)) return;
+
+    try {
+        const all = JSON.parse(legacy);
+        if (!Array.isArray(all)) return;
+
+        const baseKeys = new Set(baseTasks.map(getTaskKey));
+        saveAddedTasks(all.filter(task => !baseKeys.has(getTaskKey(task))));
+    } catch (e) {
+        console.warn('예전 일정 옮기기 실패:', e);
+    }
+}
+
+// JSON 일정 + 추가한 일정
+function getAllTasks() {
+    return baseTasks.concat(loadAddedTasks());
+}
+
+// 일정 추가 (추가한 것만 브라우저에 저장)
 function addTask(title, region, kind, owner) {
-    const tasks = loadTasks();
-    tasks.push({ title, region, kind, owner });
-    saveTasks(tasks);
-    renderTasks(tasks);
+    const added = loadAddedTasks();
+    added.push({ title, region, kind, owner });
+    saveAddedTasks(added);
+    renderTasks(getAllTasks());
+}
+
+// 파일을 못 읽었을 때 안내 문구
+function renderDataNotice() {
+    const el = document.getElementById('dataNotice');
+    if (baseTasksLoaded) {
+        el.hidden = true;
+        el.textContent = '';
+        return;
+    }
+    el.hidden = false;
+    el.textContent = '일정 파일을 읽지 못했습니다. 배포 주소로 열어 주세요.';
 }
 
 // 오늘 날짜 표시 (YYYY-MM-DD)
@@ -434,7 +485,12 @@ function handleVisibilityChange() {
 
 document.addEventListener('DOMContentLoaded', async () => {
     displayTodayDate();
-    renderTasks(loadTasks());
+
+    // 일정은 data/tasks.json 을 먼저 읽고, 추가한 일정을 뒤에 붙인다
+    baseTasks = await loadBaseTasks();
+    migrateLegacyTasks();
+    renderDataNotice();
+    renderTasks(getAllTasks());
 
     // 지난번에 고른 기준 지역 복원
     const select = document.getElementById('regionSelect');

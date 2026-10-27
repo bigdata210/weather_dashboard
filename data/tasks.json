@@ -1,0 +1,8 @@
+[
+  { "title": "다중이용시설 안전점검", "region": "세종", "kind": "야외", "owner": "김안전" },
+  { "title": "시민 안전체험 행사 운영", "region": "보령", "kind": "야외", "owner": "이행사" },
+  { "title": "옥상 태양광 설비 점검", "region": "태안", "kind": "고소", "owner": "박설비" },
+  { "title": "하천 수위계 확인", "region": "대전", "kind": "야외", "owner": "최현장" },
+  { "title": "청사 외벽 간판 보수", "region": "세종", "kind": "고소", "owner": "정시설" },
+  { "title": "비상연락 훈련", "region": "대전", "kind": "실내", "owner": "한상황" }
+]

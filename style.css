@@ -213,6 +213,16 @@ h2 {
     margin-bottom: 40px;
 }
 
+.data-notice {
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    border-radius: 6px;
+    border-left: 4px solid #d68910;
+    background-color: #fdebd0;
+    color: #8a5a06;
+    font-size: 13px;
+}
+
 table {
     width: 100%;
     border-collapse: collapse;
